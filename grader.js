@@ -39,14 +39,15 @@ var assertFileExists = function(infile) {
 };
 
 var cheerioHtmlFile = function(htmlfile) {
-    return cheerio.load(fs.readFileSync(htmlfile));
+    return cheerio.load(htmlfile);
 };
 
 var loadChecks = function(checksfile) {
     return JSON.parse(fs.readFileSync(checksfile));
 };
 
-var checkHtmlFile = function($, checksfile) {
+var checkHtmlFile = function(htmlfile, checksfile) {
+    var $ = cheerioHtmlFile(htmlfile);
     var checks = loadChecks(checksfile).sort();
     var out = {};
     for(var ii in checks) {
@@ -62,13 +63,9 @@ var clone = function(fn) {
     return fn.bind({});
 };
 
-var getAndCheckHtml = function(url, checks) {
-    rest.get(url).on('complete', function(result){
-	if (result instanceof Error){
-	    console.log('Error:', result.message);
-	} else {
-	    return  checkHtmlFile(result, checks);
-	}; 
+var getAndCheckHtml = function(url, callback) {
+    rest.get(url).on('complete', function(data, response){
+	callback(data);
     });
 };
 
@@ -78,13 +75,20 @@ if(require.main == module) {
         .option('-u, --url <url>', 'URL to index.html', 'url to html-file')
         .option('-f, --file <html_file>', 'Path to index.html', clone(assertFileExists), HTMLFILE_DEFAULT)
         .parse(process.argv);
+    console.log(program.url);
     if (program.url != undefined) {
-	var checkJson = getAndCheckHtml(program.url, program.checks);
+	var htmlString = null;
+	var checkJson = getAndCheckHtml(program.url, function(res) {	
+	    htmlString = res;
+	    var checkJson = checkHtmlFile(htmlString, program.checks);
+	    var outJson = JSON.stringify(checkJson, null, 4);
+	    console.log(outJson);
+	} );
     } else {
-	var checkJson = checkHtmlFile(cheerioHtmlFile(program.file), program.checks);
+	var checkJson = checkHtmlFile(fs.readFileSync(program.file), program.checks);
+	var outJson = JSON.stringify(checkJson, null, 4);
+	console.log(outJson);
     }
-    var outJson = JSON.stringify(checkJson, null, 4);
-    console.log(outJson);
 } else {
     exports.checkHtmlFile = checkHtmlFile;
 }
